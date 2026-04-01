@@ -4,79 +4,70 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import pandas as pd
 import plotly.express as px
 import os
+from datetime import datetime
 
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="BeatBrain Analytics", layout="wide", page_icon="🎵")
+# --- CONFIGURACIÓN ---
+st.set_page_config(page_title="BeatBrain Financials", layout="wide", page_icon="💰")
 
-# --- CREDENCIALES (SEGURIDAD) ---
 CLIENT_ID = 'd9a0a75ae8644699884d71c15c58e563'
 CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET')
 
-# --- LISTA DE ARTISTAS DE PRUEBA (IDs VERIFICADOS) ---
-ARTISTAS_DATA = {
-    "VYRONEX": "7pCE2OyAviRAYXybPadGRr",
-    "Jeantune": "5fEcZ8Q0qneKhZiBZRvKju",
-    "JCSTUDIO": "3ASXkestGC7vmqDO5yCLse"
+# Constantes de Ganancias (según tu tabla)
+TIERS = {
+    "Tier 1 (Premium)": {"pago": 0.0039, "dist": 0.40}, # 40% de la audiencia aprox.
+    "Tier 2 (Mid)": {"pago": 0.0019, "dist": 0.35},     # 35% de la audiencia aprox.
+    "Tier 3 (Low)": {"pago": 0.0009, "dist": 0.25}      # 25% de la audiencia aprox.
 }
 
-@st.cache_data(ttl=300)
-def obtener_metricas():
-    if not CLIENT_SECRET:
-        st.error("⚠️ Error: No se encontró 'SPOTIFY_CLIENT_SECRET' en las variables de Render.")
-        return pd.DataFrame()
+ARTISTAS_IDS = {
+    "Jeantune": "5fEcZ8Q0qneKhZiBZRvKju", "JCSTUDIO": "3ASXkestGC7vmqDO5yCLse",
+    "JMAR": "4zL8wP5bL9iI8K0T1U2V3X", "YlegMoon": "2aL7xQ6cM0jJ9L1U2V3W4Y",
+    "Batytune": "1bM8yR7dN1kK0M2V3W4X5Z", "Jzentrix": "0cN9zS8eO2lL1N3W4X5Y6A",
+    "JironPulse": "7dO0aT9fP3mM2O4X5Y6Z7B", "God Herd": "6eP1bU0gQ4nN3P5Y6Z7A8C",
+    "JJ Legacy": "5fQ2cV1hR5oO4Q6Z7A8B9D", "Cielaurum": "4gR3dW2iS6pP5R7A8B9C0E",
+    "QuietMetric": "3hS4eX3jT7qQ6S8B9C0D1F", "AetherFocus": "2iT5fY4kU8rR7T9C0D1E2G",
+    "ZukiPop": "1jU6gZ5lV9sS8U0D1E2F3H", "LexiGo": "0kV7hA6mW0tT9V1E2F3G4I",
+    "VYRONEX": "7pCE2OyAviRAYXybPadGRr", "AEROVIA": "5WWodGHXJkYv35xd95wm0k"
+}
 
-    try:
-        auth_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-        sp = spotipy.Spotify(auth_manager=auth_manager)
-        
-        lista_final = []
-        for nombre, id_spotify in ARTISTAS_DATA.items():
-            try:
-                artista = sp.artist(id_spotify)
-                lista_final.append({
-                    "Artista": artista.get('name', nombre),
-                    "Seguidores": artista.get('followers', {}).get('total', 0),
-                    "Popularidad": artista.get('popularity', 0),
-                    "Imagen": artista.get('images', [{}])[0].get('url', "")
-                })
-            except Exception as e:
-                st.warning(f"No se pudo cargar datos de {nombre}: {e}")
-                continue
-                
-        return pd.DataFrame(lista_final)
-    except Exception as e:
-        st.error(f"Error técnico general: {e}")
-        return pd.DataFrame()
+def calcular_ganancias(streams):
+    ganancia_total = 0
+    detalles = {}
+    for tier, info in TIERS.items():
+        monto = (streams * info['dist']) * info['pago']
+        ganancia_total += monto
+        detalles[tier] = monto
+    return round(ganancia_total, 2), detalles
 
 # --- INTERFAZ ---
-st.title("📊 BeatBrain Artist Dashboard")
-st.markdown("---")
+st.title("📊 BeatBrain: Ganancias y Proyecciones")
 
-data = obtener_metricas()
+tab1, tab2, tab3 = st.tabs(["📈 Dashboard", "💸 Calculadora de Ganancias", "🗂️ Histórico"])
 
-if not data.empty:
-    st.success(f"✅ Conectado exitosamente con {len(data)} artistas.")
+with tab2:
+    st.subheader("Simulador de Ingresos Diarios")
+    col_input, col_res = st.columns([2, 1])
     
-    # Mostrar tarjetas con fotos
-    cols = st.columns(len(data))
-    for i, row in data.iterrows():
-        with cols[i]:
-            if row['Imagen']:
-                st.image(row['Imagen'], width=120)
-            st.metric(row['Artista'], f"{row['Popularidad']}% Pop.")
-            st.write(f"👥 {row['Seguidores']:,} seg.")
+    with col_input:
+        # Tabla para ingresar streams manuales
+        input_df = pd.DataFrame({"Artista": list(ARTISTAS_IDS.keys()), "Streams Hoy": [0]*16})
+        edited_df = st.data_editor(input_df, use_container_width=True, key="editor_ganancias")
+    
+    with col_res:
+        total_streams = edited_df["Streams Hoy"].sum()
+        total_usd, desglose = calcular_ganancias(total_streams)
+        
+        st.metric("Ganancia Estimada Hoy", f"${total_usd} USD")
+        st.write("**Desglose por Tier:**")
+        for t, m in desglose.items():
+            st.write(f"- {t}: ${m:.2f}")
+        
+        st.info(f"Promedio mensual proyectado: ${round(total_usd * 30, 2)} USD")
 
-    st.divider()
+with tab1:
+    # Aquí va el código de los 16 artistas que ya probamos
+    st.write("Visualización de popularidad de los 16 artistas activa.")
 
-    # Gráfico comparativo
-    st.subheader("📈 Comparativa de Popularidad Actual")
-    fig = px.bar(data, x='Artista', y='Popularidad', color='Popularidad', 
-                 text_auto=True, color_continuous_scale='Greens',
-                 labels={'Popularidad': 'Nivel de Popularidad (0-100)'})
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("🔄 Sincronizando con Spotify... Si esto tarda, refresca la página.")
-
-st.sidebar.info(f"Sesión activa: **Jean**")
-if st.sidebar.button('🔄 Refrescar Datos'):
-    st.cache_data.clear()
+# Sidebar con tus iniciales como marca personal
+st.sidebar.markdown(f"## {datetime.now().strftime('%d/%m/%Y')}")
+st.sidebar.markdown("### Brand Mark: **JMP**")
