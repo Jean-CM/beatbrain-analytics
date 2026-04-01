@@ -97,4 +97,4 @@ if not data.empty:
 else:
     st.warning("No se pudieron cargar los datos. Verifica tus credenciales en Render.")
 
-st.sidebar.info(f"Logueado como: {CLIENT_ID[:5]}... | Gem")
+st.sidebar.info(f"Logueado como: {CLIENT_ID[:5]}... | Jean")
