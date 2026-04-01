@@ -34,7 +34,9 @@ def iniciar_bot_jatune():
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
+    
+    # ESTA LÍNEA ES LA CLAVE PARA RENDER:
+    chrome_options.binary_location = "/usr/bin/google-chrome" # O "/usr/bin/chromium-browser"
     
     try:
         # Instalación automática del driver compatible con Linux/Render
@@ -89,3 +91,30 @@ with col2:
 with col1:
     st.subheader("Última Sincronización")
     st.info("Presiona el botón rojo para que el bot recoja los datos de hoy.")
+
+# --- TABLA DE AUDITORÍA DETALLADA ---
+st.subheader("📋 Auditoría de Catálogo JMP")
+if not st.session_state['data_sync'].empty:
+    df = st.session_state['data_sync']
+    
+    # Agregamos una columna de estado visual
+    df['Estado'] = df['Streams'].apply(lambda x: '🔥 Activo' if x > 1000 else '💤 Bajo')
+    
+    # Mostramos tabla con estilo
+    st.dataframe(df.style.highlight_max(axis=0, subset=['Streams'], color='#F1DBC1'), use_container_width=True)
+
+    # --- NUEVAS GRÁFICAS ---
+    col_g1, col_g2 = st.columns(2)
+    
+    with col_g1:
+        st.write("### 📈 Rendimiento por Artista")
+        fig_bar = px.bar(df, x="Artista", y="Streams", color="Streams", 
+                         color_continuous_scale='RdBu') # Colores dinámicos
+        st.plotly_chart(fig_bar, use_container_width=True)
+        
+    with col_g2:
+        st.write("### 🎯 Participación de Mercado")
+        fig_pie = px.pie(df, values='Streams', names='Artista', hole=0.3)
+        st.plotly_chart(fig_pie, use_container_width=True)
+else:
+    st.warning("⚠️ Sin datos para graficar. Ejecuta el bot primero.")
