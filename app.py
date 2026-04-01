@@ -6,93 +6,90 @@ from datetime import datetime
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="BeatJATune - Inteligencia Musical", layout="wide", page_icon="📈")
 
-# --- DISEÑO CUSTOM (CSS) para dinamismo ---
+# --- DISEÑO CUSTOM (CSS CORREGIDO) ---
 st.markdown("""
 <style>
-    /* Cambiar el color de acento de Streamlit (botones, sliders, etc.) al color vino de tu logo */
-    :root {
-        --primary-color: #8D1C3E; /* El color granate/vino de JATune */
-    }
+    /* Color vino de JATune para botones y acentos */
     .stButton>button {
-        background-color: #8D1C3E;
-        color: white;
-        border-radius: 20px;
-        transition: all 0.3s;
+        background-color: #8D1C3E !important;
+        color: white !important;
+        border-radius: 20px !important;
+        border: none !important;
+        transition: all 0.3s ease;
     }
     .stButton>button:hover {
-        background-color: #A32A4D;
+        background-color: #A32A4D !important;
         transform: scale(1.05);
     }
-    /* Estilo para las métricas */
-    div[data-testid="stMetricValue"] {
-        color: #8D1C3E;
+    /* Estilo para las métricas en color vino */
+    [data-testid="stMetricValue"] {
+        color: #8D1C3E !important;
+    }
+    /* Estilo para el contenedor de ganancias */
+    .ganancia-box {
+        background-color: #f0f2f6;
+        border-radius: 10px;
+        padding: 20px;
+        border-left: 10px solid #8D1C3E;
     }
 </style>
-""", unsafe_allow_stdio=True)
+""", unsafe_allow_html=True) # <-- AQUÍ ESTABA EL ERROR CORREGIDO
 
-# --- SIDEBAR: Incorporación del Logo de JATune ---
-# Usamos la URL directa de la imagen que me diste
-url_logo_jatune = "https://files.oaiusercontent.com/file-2mN4M0zH0I8GzJ0S5K4C7P7F?se=2024-05-23T16%3A32%3A58Z&sp=r&rscc=max-age%3D604800%2C%20immutable&rscd=attachment%3B%20filename%3Db63ff134-c7ff-43b6-99ff-4ff2b7044f51.png&sig=4N3K%2BM0mY1I2j1o0R6u0I3R8p%2BQ0o2I%3D"
-
-# Contenedor del sidebar para el logo y el nombre
+# --- SIDEBAR: Logotipo y Nombre ---
 with st.sidebar:
-    st.image(image_12.png, use_column_width=True) # Logo dinámico arriba
-    st.title("BeatJATune") # Nombre sin el "Pro"
+    # Mostramos el logo JATune (asegúrate de que la URL sea accesible o usa el archivo local)
+    st.image("https://raw.githubusercontent.com/tu_usuario/tu_repo/main/image_c61636.png", 
+             caption="JATune - Music Label", use_container_width=True)
+    
+    st.title("BeatJATune")
     st.markdown("---")
     st.write(f"📂 **Categoría:** Catálogo JMP")
     st.write(f"📅 **Hoy:** {datetime.now().strftime('%d/%m/%Y')}")
 
-# --- ESTADO DE LA MÁQUINA (Session State) ---
-if 'historico_ganancias' not in st.session_state:
-    st.session_state['historico_ganancias'] = pd.DataFrame()
+# --- ESTADO DE DATOS ---
+if 'data_sync' not in st.session_state:
+    st.session_state['data_sync'] = pd.DataFrame()
 
-# --- INTERFAZ PRINCIPAL DINÁMICA ---
+# --- INTERFAZ PRINCIPAL ---
 st.title("📊 Centro de Comando JMP")
-st.markdown("Sincronización total con *Spotify for Artists* y cálculo de Royalties por país.")
+st.markdown("Gestión de activos y análisis de ingresos en tiempo real.")
 
-tab1, tab2 = st.tabs(["🚀 Dashboard de Crecimiento", "💰 Calculadora de Royalties (Tiered)"])
+tab1, tab2 = st.tabs(["🚀 Dashboard", "💰 Royalties"])
 
 with tab1:
-    st.subheader("Estado de los 16 Perfiles")
-    c1, c2 = st.columns([3, 1])
-    with c2:
-        st.info("Presiona el botón para activar el bot de Selenium.")
-        if st.button("🤖 Iniciar Sincronización Directa"):
-            with st.spinner("Bot JMP navegando..."):
-                # Simulación para vista
-                st.session_state['historico_ganancias'] = pd.DataFrame({
-                    "Artista": ["Jeantune", "JCSTUDIO", "VYRONEX", "AEROVIA"],
-                    "Streams": [1250, 850, 3200, 450],
-                    "Oyentes Activos": [400, 310, 1200, 150]
+    col_a, col_b = st.columns([2, 1])
+    with col_b:
+        st.info("Activa el bot de Selenium para traer la data real de tus 16 perfiles.")
+        if st.button("🤖 Iniciar Sincronización"):
+            with st.spinner("Bot JMP en movimiento..."):
+                # Simulación de datos para la vista
+                st.session_state['data_sync'] = pd.DataFrame({
+                    "Artista": ["Jeantune", "JCSTUDIO", "VYRONEX", "AEROVIA", "JMAR", "YlegMoon"],
+                    "Streams": [1250, 850, 3200, 450, 980, 1100],
+                    "Oyentes": [400, 310, 1200, 150, 300, 350]
                 })
-                st.success("✅ Datos sincronizados.")
-    with c1:
-        if not st.session_state['historico_ganancias'].empty:
-            st.dataframe(st.session_state['historico_ganancias'], use_container_width=True)
+                st.success("✅ Sincronización BeatJATune Exitosa")
+    
+    with col_a:
+        if not st.session_state['data_sync'].empty:
+            st.dataframe(st.session_state['data_sync'], use_container_width=True)
         else:
-            st.warning("🔄 Sincroniza los datos para ver la tabla.")
+            st.warning("⚠️ Sin datos actuales. Pulsa 'Iniciar Sincronización'.")
 
 with tab2:
-    st.subheader("Simulador de Ingresos Diarios por Región (Tabla Tiered)")
-    if not st.session_state['historico_ganancias'].empty:
-        df = st.session_state['historico_ganancias']
-        total_streams = df["Streams"].sum()
+    if not st.session_state['data_sync'].empty:
+        df = st.session_state['data_sync']
+        total_s = df["Streams"].sum()
         
-        # Usamos tu tabla de tiers para el cálculo (promedio rápido 0.0039 T1, 0.0019 T2, 0.0009 T3)
-        pago_promedio = 0.0025 # Un promedio mezclado para la vista rápida
-        ganancia_estimada = total_streams * pago_promedio
+        # Cálculo basado en tus Tiers (promedio aproximado)
+        ganancia = total_s * 0.0028 
         
-        # Vista dinámica de resultados
         st.markdown(f"""
-        <div style="background-color:#f0f2f6; border-radius:10px; padding:20px; border-left: 10px solid #8D1C3E;">
-            <h3>Ganancia Total Ayer</h3>
-            <h1 style="color:#8D1C3E;">${ganancia_estimada:.2f} USD</h1>
-            <p>Basado en {total_streams:,} streams totales.</p>
+        <div class="ganancia-box">
+            <h3 style="margin:0;">Ganancia Total Ayer</h3>
+            <h1 style="color:#8D1C3E; margin:10px 0;">${ganancia:.2f} USD</h1>
+            <p style="margin:0; color:#555;">Basado en {total_s:,} streams totales del catálogo.</p>
         </div>
         """, unsafe_allow_html=True)
-        
-        st.divider()
-        # Gráfico dinámico con colores de la marca
-        fig = px.bar(df, x="Artista", y="Streams", color="Streams", 
-                     title="Streams por Artista", color_continuous_scale=['#8D1C3E', '#F1DBC1']) # Vino a crema
-        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Esperando sincronización para calcular ganancias...")
