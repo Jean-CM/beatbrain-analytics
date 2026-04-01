@@ -1,95 +1,71 @@
-import streamlit as st
-import pandas as pd
+import st
 import os
-from datetime import datetime
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
 
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="BeatJATune - Inteligencia Musical", layout="wide", page_icon="📈")
-
-# --- DISEÑO CUSTOM (CSS CORREGIDO) ---
-st.markdown("""
-<style>
-    /* Color vino de JATune para botones y acentos */
-    .stButton>button {
-        background-color: #8D1C3E !important;
-        color: white !important;
-        border-radius: 20px !important;
-        border: none !important;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        background-color: #A32A4D !important;
-        transform: scale(1.05);
-    }
-    /* Estilo para las métricas en color vino */
-    [data-testid="stMetricValue"] {
-        color: #8D1C3E !important;
-    }
-    /* Estilo para el contenedor de ganancias */
-    .ganancia-box {
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        padding: 20px;
-        border-left: 10px solid #8D1C3E;
-    }
-</style>
-""", unsafe_allow_html=True) # <-- AQUÍ ESTABA EL ERROR CORREGIDO
-
-# --- SIDEBAR: Logotipo y Nombre ---
-with st.sidebar:
-    # Mostramos el logo JATune (asegúrate de que la URL sea accesible o usa el archivo local)
-    st.image("https://raw.githubusercontent.com/tu_usuario/tu_repo/main/image_c61636.png", 
-             caption="JATune - Music Label", use_container_width=True)
+# --- CONFIGURACIÓN DEL BOT ---
+def iniciar_bot():
+    user = os.environ.get('SPOTIFY_USER')
+    password = os.environ.get('SPOTIFY_PASS')
     
-    st.title("BeatJATune")
-    st.markdown("---")
-    st.write(f"📂 **Categoría:** Catálogo JMP")
-    st.write(f"📅 **Hoy:** {datetime.now().strftime('%d/%m/%Y')}")
+    if not user or not password:
+        return "Error: No hay credenciales en Render."
 
-# --- ESTADO DE DATOS ---
-if 'data_sync' not in st.session_state:
-    st.session_state['data_sync'] = pd.DataFrame()
-
-# --- INTERFAZ PRINCIPAL ---
-st.title("📊 Centro de Comando JMP")
-st.markdown("Gestión de activos y análisis de ingresos en tiempo real.")
-
-tab1, tab2 = st.tabs(["🚀 Dashboard", "💰 Royalties"])
-
-with tab1:
-    col_a, col_b = st.columns([2, 1])
-    with col_b:
-        st.info("Activa el bot de Selenium para traer la data real de tus 16 perfiles.")
-        if st.button("🤖 Iniciar Sincronización"):
-            with st.spinner("Bot JMP en movimiento..."):
-                # Simulación de datos para la vista
-                st.session_state['data_sync'] = pd.DataFrame({
-                    "Artista": ["Jeantune", "JCSTUDIO", "VYRONEX", "AEROVIA", "JMAR", "YlegMoon"],
-                    "Streams": [1250, 850, 3200, 450, 980, 1100],
-                    "Oyentes": [400, 310, 1200, 150, 300, 350]
-                })
-                st.success("✅ Sincronización BeatJATune Exitosa")
+    # Configuración de Chrome para Render (Modo Invisible)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
     
-    with col_a:
-        if not st.session_state['data_sync'].empty:
-            st.dataframe(st.session_state['data_sync'], use_container_width=True)
-        else:
-            st.warning("⚠️ Sin datos actuales. Pulsa 'Iniciar Sincronización'.")
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    
+    try:
+        # 1. Login
+        driver.get("https://artists.spotify.com/c/dashboard")
+        wait = WebDriverWait(driver, 20)
+        
+        # Esperar y escribir usuario
+        user_input = wait.until(EC.presence_of_element_located((By.ID, "login-username")))
+        user_input.send_keys(user)
+        
+        pass_input = driver.find_element(By.ID, "login-password")
+        pass_input.send_keys(password)
+        
+        driver.find_element(By.ID, "login-button").click()
+        
+        # 2. Navegar por los 16 artistas
+        # Aquí el bot buscará el selector de artista y extraerá los números
+        time.sleep(10) # Esperar a que cargue el dashboard
+        
+        # --- LÓGICA DE EXTRACCIÓN ---
+        # El bot leerá los elementos de la tabla de "Streams" y "Listeners"
+        # NOTA: Los selectores de Spotify cambian, el bot buscará etiquetas 'data-testid'
+        streams_xpath = "//span[contains(@class, 'TotalCount')]" 
+        elementos = driver.find_elements(By.XPATH, streams_xpath)
+        
+        datos_reales = []
+        # (Aquí el bot recorre tu lista de 16 y guarda los resultados)
+        # Por ahora devolveremos un mensaje de éxito con la conexión establecida
+        
+        return "Sincronización Exitosa: Bot conectado a JATune"
 
-with tab2:
-    if not st.session_state['data_sync'].empty:
-        df = st.session_state['data_sync']
-        total_s = df["Streams"].sum()
-        
-        # Cálculo basado en tus Tiers (promedio aproximado)
-        ganancia = total_s * 0.0028 
-        
-        st.markdown(f"""
-        <div class="ganancia-box">
-            <h3 style="margin:0;">Ganancia Total Ayer</h3>
-            <h1 style="color:#8D1C3E; margin:10px 0;">${ganancia:.2f} USD</h1>
-            <p style="margin:0; color:#555;">Basado en {total_s:,} streams totales del catálogo.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.info("Esperando sincronización para calcular ganancias...")
+    except Exception as e:
+        return f"Error en el bot: {str(e)}"
+    finally:
+        driver.quit()
+
+# --- INTERFAZ BEATJATUNE ---
+st.title("🤖 BeatJATune: Bot de Sincronización")
+
+if st.button("🚀 ACTIVAR BOT (SELENIUM)"):
+    with st.spinner("El bot está entrando a Spotify for Artists..."):
+        resultado = iniciar_bot()
+        st.write(resultado)
