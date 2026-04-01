@@ -15,7 +15,7 @@ CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET')
 
 # --- LISTA DE ARTISTAS ---
 ARTISTAS_DATA = {
-    "Jeantune": "4yI4vN3ZJ7fG6I8R9T0U1V", # Extraído de tu link
+    "Jeantune": "5fEcZ8Q0qneKhZiBZRvKju", # Extraído de tu link
     "JCSTUDIO": "5yJ5vO4aK8gH7J9S0T1U2W",
     "JMAR": "6zK6wP5bL9iI8K0T1U2V3X",
     "YlegMoon": "7aL7xQ6cM0jJ9L1U2V3W4Y",
