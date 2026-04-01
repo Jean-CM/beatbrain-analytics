@@ -2,3 +2,5 @@ streamlit
 spotipy
 pandas
 plotly
+selenium
+webdriver-manager
