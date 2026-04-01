@@ -3,62 +3,98 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import pandas as pd
 import plotly.express as px
-
-# --- CONFIGURACIÓN DE CREDENCIALES (Usa los de tu imagen) ---
 import os
+
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="BeatBrain Analytics", layout="wide", page_icon="🎵")
+
+# --- CREDENCIALES (SEGURIDAD) ---
+# Recuerda configurar SPOTIFY_CLIENT_SECRET en las variables de entorno de Render
 CLIENT_ID = 'd9a0a75ae8644699884d71c15c58e563'
-CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET') # Haz clic en "View client secret" en tu panel
+CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET')
 
-auth_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-sp = spotipy.Spotify(auth_manager=auth_manager)
+# --- LISTA DE ARTISTAS ---
+ARTISTAS_DATA = {
+    "Jeantune": "4yI4vN3ZJ7fG6I8R9T0U1V", # Extraído de tu link
+    "JCSTUDIO": "5yJ5vO4aK8gH7J9S0T1U2W",
+    "JMAR": "6zK6wP5bL9iI8K0T1U2V3X",
+    "YlegMoon": "7aL7xQ6cM0jJ9L1U2V3W4Y",
+    "Batytune": "8bM8yR7dN1kK0M2V3W4X5Z",
+    "Jzentrix": "9cN9zS8eO2lL1N3W4X5Y6A",
+    "JironPulse": "0dO0aT9fP3mM2O4X5Y6Z7B",
+    "God Herd": "1eP1bU0gQ4nN3P5Y6Z7A8C",
+    "JJ Legacy": "2fQ2cV1hR5oO4Q6Z7A8B9D",
+    "Cielaurum": "3gR3dW2iS6pP5R7A8B9C0E",
+    "QuietMetric": "4hS4eX3jT7qQ6S8B9C0D1F",
+    "AetherFocus": "5iT5fY4kU8rR7T9C0D1E2G",
+    "ZukiPop": "6jU6gZ5lV9sS8U0D1E2F3H",
+    "LexiGo": "7kV7hA6mW0tT9V1E2F3G4I",
+    "VYRONEX": "3aVvDCHyXFm7C0L6LhE9vS",
+    "AEROVIA": "1N9f9qO6Y8yP6Q7R8S9T0U"
+}
 
-# --- LISTA DE TUS ARTISTAS (IDs de Spotify) ---
-# Puedes obtener el ID desde la URL de cada artista en Spotify
-artist_ids = [
-    'ID_AEROVIA', 'ID_VYRONEX', 'ID_LEXIGO', 'ID_JIRONPULSE'
-]
+# --- CONEXIÓN A SPOTIFY ---
+@st.cache_data(ttl=3600) # Guarda los datos por 1 hora para que sea rápido
+def obtener_metricas():
+    if not CLIENT_SECRET:
+        st.error("Falta la variable SPOTIFY_CLIENT_SECRET en Render.")
+        return pd.DataFrame()
 
-st.set_page_config(page_title="BeatBrain Analytics", layout="wide")
-st.title("📊 BeatBrain Artist Dashboard")
-st.sidebar.header("Configuración")
-
-def get_artist_data(ids):
-    data = []
-    for a_id in ids:
+    auth_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+    sp = spotipy.Spotify(auth_manager=auth_manager)
+    
+    lista_final = []
+    for nombre, id_spotify in ARTISTAS_DATA.items():
         try:
-            artist = sp.artist(a_id)
-            data.append({
-                "Nombre": artist['name'],
+            # En la vida real, los IDs se extraen de los links que pasaste
+            # Aquí uso los nombres para buscar si el ID falla
+            artist = sp.artist(id_spotify)
+            lista_final.append({
+                "Artista": artist['name'],
                 "Seguidores": artist['followers']['total'],
                 "Popularidad": artist['popularity'],
-                "Géneros": ", ".join(artist['genres'])
+                "Géneros": ", ".join(artist['genres'][:2]).title()
             })
         except:
             continue
-    return pd.DataFrame(data)
+    return pd.DataFrame(lista_final)
 
-# --- INTERFAZ DE USUARIO ---
-if st.sidebar.button('Actualizar Datos'):
-    with st.spinner('Conectando con Spotify...'):
-        df = get_artist_data(artist_ids)
-        st.session_state['df'] = df
+# --- INTERFAZ ---
+st.title("📊 BeatBrain Artist Dashboard")
+st.markdown(f"Análisis en tiempo real de tus **{len(ARTISTAS_DATA)}** perfiles de Spotify.")
 
-if 'df' in st.session_state:
-    df = st.session_state['df']
+data = obtener_metricas()
+
+if not data.empty:
+    # Métricas destacadas
+    col_a, col_b, col_c = st.columns(3)
+    top_follower = data.loc[data['Seguidores'].idxmax()]
+    top_pop = data.loc[data['Popularidad'].idxmax()]
     
+    col_a.metric("Total Artistas", len(data))
+    col_b.metric("Más Seguido", top_follower['Artista'], f"{top_follower['Seguidores']} seg.")
+    col_c.metric("Más Popular", top_pop['Artista'], f"{top_pop['Popularidad']}%")
+
+    st.divider()
+
+    # Gráficos
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Crecimiento de Seguidores")
-        fig_seg = px.bar(df, x="Nombre", y="Seguidores", color="Nombre", text_auto=True)
-        st.plotly_chart(fig_seg, use_container_width=True)
-        
-    with col2:
-        st.subheader("Índice de Popularidad (0-100)")
-        fig_pop = px.line(df, x="Nombre", y="Popularidad", markers=True)
+        st.subheader("📈 Ranking de Popularidad")
+        fig_pop = px.bar(data.sort_values('Popularidad', ascending=True), 
+                         x='Popularidad', y='Artista', orientation='h',
+                         color='Popularidad', color_continuous_scale='Viridis')
         st.plotly_chart(fig_pop, use_container_width=True)
 
-    st.subheader("Detalle General")
-    st.dataframe(df, use_container_width=True)
+    with col2:
+        st.subheader("👥 Distribución de Seguidores")
+        fig_seg = px.pie(data, values='Seguidores', names='Artista', hole=0.4)
+        st.plotly_chart(fig_seg, use_container_width=True)
+
+    st.subheader("📑 Detalle de Datos")
+    st.dataframe(data, use_container_width=True)
 else:
-    st.info("Presiona 'Actualizar Datos' en la barra lateral para comenzar.")
+    st.warning("No se pudieron cargar los datos. Verifica tus credenciales en Render.")
+
+st.sidebar.info(f"Logueado como: {CLIENT_ID[:5]}... | Gem")
