@@ -11,7 +11,8 @@ st.set_page_config(page_title="JATune Command Center v2", layout="wide", page_ic
 # Estilo Ejecutivo (Dark Mode & Accents)
 st.markdown("""
     <style>
-    .main { background-color: #0d1117; color: #c9d1d9; }
+    .main { background-color: #0d1117; color: #c9
+    d1d9; }
     .stMetric { border: 1px solid #30363d; padding: 15px; border-radius: 10px; background-color: #161b22; }
     div[data-testid="stExpander"] { border: 1px solid #30363d; background-color: #0d1117; }
     </style>
@@ -27,6 +28,8 @@ try:
     client_secret = st.secrets["SPOTIPY_CLIENT_SECRET"]
     auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
     sp = spotipy.Spotify(auth_manager=auth_manager)
+    # Línea de prueba temporal
+st.write(f"Conexión exitosa con ID: {sp.me()['id']}") if st.sidebar.button("Probar Conexión") else None
 except Exception as e:
     st.error(f"⚠️ Error de conexión con Spotify API: {e}")
     st.stop()
