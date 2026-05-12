@@ -1,160 +1,115 @@
 import streamlit as st
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 import pandas as pd
-import numpy as np
 import plotly.express as px
-import os
-from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
 
-# --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="BeatJATune JMP Pro", layout="wide", page_icon="📈")
+# Configuración de página con look "High-Tech"
+st.set_page_config(page_title="JATune Command Center", layout="wide", page_icon="🚀")
 
+# Estilo Ejecutivo Personalizado
 st.markdown("""
-<style>
-    .stApp { background-color: #0e1117; color: white; }
-    [data-testid="stSidebar"] { background-color: #1a1c24; }
-    .metric-card {
-        background-color: #1e2130;
-        padding: 15px;
-        border-radius: 10px;
-        border-top: 4px solid #8D1C3E;
-        text-align: center;
-    }
-    .stButton>button { background-color: #8D1C3E !important; color: white !important; border-radius: 20px; width: 100%; }
-</style>
-""", unsafe_allow_html=True)
+    <style>
+    .main { background-color: #0e1117; }
+    .stMetric { border: 1px solid #4d4d4d; padding: 10px; border-radius: 5px; background-color: #161b22; }
+    .sidebar .sidebar-content { background-image: linear-gradient(#2e3137,#0e1117); }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- 2. BASE DE DATOS JMP ---
-if 'df_real' not in st.session_state:
-    data_jmp = {
-        "Artista": ["Jeantune", "JCSTUDIO", "JMAR", "YlegMoon", "Batytune", "Jzentrix", "JironPulse", "God Herd", "JJ Legacy", "Cielaurum", "QuietMetric", "AetherFocus", "ZukiPop", "LexiGo", "VYRONEX", "AEROVIA"],
-        "Autor": ["Jean C", "Jean C", "Jean C", "Angely", "Angely", "Dari", "Micha", "Jean C", "Jean C", "Angely", "Dari", "Jean C", "Jean C", "Jean C", "Jean C", "Jean C"],
-        "Distribuidor": ["Distrokid", "Distrokid", "Ditto", "Distrokid", "Distrokid", "Distrokid", "Distrokid", "TuneCore", "Symphonic", "Ditto", "Ditto", "Ditto", "Distrokid", "Distrokid", "Distrokid", "Distrokid"],
-        "Streams": [0] * 16,
-        "Revenue": [0.0] * 16
-    }
-    st.session_state.df_real = pd.DataFrame(data_jmp)
+# --- 1. AUTENTICACIÓN ---
+try:
+    client_id = st.secrets["d9a0a75ae8644699884d71c15c58e563"]
+    client_secret = st.secrets["a45b08ed2d544142a6b7b18a48e06b08"]
+    auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+    sp = spotipy.Spotify(auth_manager=auth_manager)
+except Exception as e:
+    st.error("⚠️ Error: Configura las credenciales en los Secrets de Streamlit.")
+    st.stop()
 
-# --- 3. FUNCIÓN DEL BOT (ULTRA-DETECTOR) ---
-def ejecutar_sync_jmp():
-    cookie_val = st.secrets.get("SPOTIFY_COOKIE")
-    if not cookie_val:
-        return "❌ Error: Configura SPOTIFY_COOKIE en Secrets."
-    
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080") # Pantalla grande para ver todo
-    options.binary_location = "/usr/bin/chromium"
+# --- 2. BASE DE DATOS DEL SELLO JATUNE ---
+data_label = {
+    "Artista": ["Jeantune", "JCSTUDIO", "JMAR", "YlegMoon", "Batytune", "Jzentrix", "JironPulse", "God Herd", "JJ Legacy", "Cielaurum", "QuietMetric", "AetherFocus", "ZukiPop", "LexiGo", "VYRONEX", "AEROVIA"],
+    "Autor": ["Jean C", "Jean C", "Jean C", "Angely", "Angely", "Dari", "Micha", "Jean C", "Jean C", "Angely", "Dari", "Jean C", "Jean C", "Jean C", "Jean C", "Jean C"],
+    "Distribuidor": ["Distrokid", "Distrokid", "Ditto", "Distrokid", "Distrokid", "Distrokid", "Distrokid", "TuneCore", "Symphonic", "Ditto", "Ditto", "Ditto", "Distrokid", "Distrokid", "Distrokid", "Distrokid"]
+}
+df_label = pd.DataFrame(data_label)
 
+# --- 3. FUNCIONES DE APOYO ---
+@st.cache_data(ttl=3600)
+def buscar_datos_spotify(nombre_artista):
+    """Busca al artista en Spotify y extrae métricas actuales."""
     try:
-        service = Service("/usr/bin/chromedriver")
-        driver = webdriver.Chrome(service=service, options=options)
-        
-        # 1. Entrar y poner cookie
-        driver.get("https://artists.spotify.com/c/roster")
-        driver.add_cookie({"name": "sp_dc", "value": cookie_val, "domain": ".spotify.com"})
-        driver.refresh()
-        
-        # 2. Espera extendida de 20 segundos para asegurar que el JS renderice
-        time.sleep(20) 
-        
-        # Scroll para activar elementos perezosos
-        driver.execute_script("window.scrollTo(0, 500);")
-        time.sleep(2)
+        resultado = sp.search(q=f'artist:{nombre_artista}', type='artist', limit=1)
+        if resultado['artists']['items']:
+            a = resultado['artists']['items'][0]
+            return {
+                "Spotify_ID": a['id'],
+                "Seguidores": a['followers']['total'],
+                "Popularidad": a['popularity'],
+                "Link": a['external_urls']['spotify'],
+                "Imagen": a['images'][0]['url'] if a['images'] else None
+            }
+    except:
+        return None
+    return None
 
-        # 3. Intentar capturar por múltiples selectores comunes de Spotify
-        intentos_xpath = [
-            "//div[contains(@data-testid, 'stats-count')]",
-            "//span[contains(@class, 'TotalCount')]",
-            "//div[contains(@class, 'Stats-count')]",
-            "//div[contains(@aria-label, 'Streams')]",
-            "//h1" # A veces el número es el H1 principal
-        ]
-        
-        total_real = 0
-        for xpath in intentos_xpath:
-            try:
-                elementos = driver.find_elements(By.XPATH, xpath)
-                for el in elementos:
-                    texto = el.text.replace(',', '').replace('.', '').strip()
-                    if texto.isdigit() and int(texto) > 0:
-                        total_real = int(texto)
-                        break
-                if total_real > 0: break
-            except: continue
+# --- 4. INTERFAZ PRINCIPAL ---
+st.title("🎵 JATune Executive Dashboard")
+st.sidebar.image("https://img.icons8.com/fluency/96/music-record.png", width=80)
+st.sidebar.title("Navegación")
+menu = st.sidebar.radio("Ir a:", ["Vista General", "Métricas Spotify", "Auditoría de Distribución", "Generador de Playlists"])
 
-        if total_real > 0:
-            # Sincronización exitosa
-            new_df = st.session_state.df_real.copy()
-            # Repartimos el total (esta lógica se puede afinar luego)
-            new_df["Streams"] = np.random.multinomial(total_real, [1/16]*16)
-            new_df["Revenue"] = new_df["Streams"] * 0.0038
-            st.session_state.df_real = new_df
-            return f"✅ ¡Exito JMP! Sincronizados {total_real:,} streams reales."
-        else:
-            # Si falla el selector, tomamos una captura para depurar (opcional)
-            return "⚠️ Sesión activa, pero los números no se mostraron. Intenta recargar la página de Spotify en tu navegador y copia una nueva Cookie."
-            
-    except Exception as e:
-        return f"❌ Error: {str(e)}"
-    finally:
-        driver.quit()
+# Lógica de Datos: Enriquecer DataFrame con Spotify
+with st.spinner('Actualizando métricas desde Spotify...'):
+    metrics = []
+    for art in df_label["Artista"]:
+        res = buscar_datos_spotify(art)
+        metrics.append(res if res else {"Spotify_ID": "N/A", "Seguidores": 0, "Popularidad": 0, "Link": "#", "Imagen": None})
+    
+    df_metrics = pd.DataFrame(metrics)
+    df_final = pd.concat([df_label, df_metrics], axis=1)
 
-# --- 4. SIDEBAR ---
-with st.sidebar:
-    try: st.image("logo.png", width=240)
-    except: st.title("JA Tune")
-    if st.button("🔄 ACTIVAR SYNC JMP (20s)"):
-        with st.spinner("Bot entrando a Spotify for Artists..."):
-            status = ejecutar_sync_jmp()
-            st.toast(status)
-    st.markdown("---")
-    st.write(f"📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+# --- MÓDULO 1: VISTA GENERAL ---
+if menu == "Vista General":
+    st.subheader("📋 Resumen del Catálogo JATune")
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Artistas", len(df_final))
+    col2.metric("Total Seguidores", f"{df_final['Seguidores'].sum():,}")
+    col3.metric("Distribuidora Principal", df_final['Distribuidor'].mode()[0])
 
-# --- 5. BUSCADORES Y FILTROS ---
-st.title("🛡️ BeatJATune: Inteligencia de Negocios JMP")
+    st.dataframe(df_final[["Artista", "Autor", "Distribuidor", "Popularidad", "Seguidores"]], use_container_width=True)
 
-c1, c2 = st.columns(2)
-with c1:
-    f_art = st.multiselect("🔍 Artista:", options=st.session_state.df_real["Artista"].unique(), default=st.session_state.df_real["Artista"].unique())
-with c2:
-    f_dist = st.multiselect("🏢 Distribuidora:", options=st.session_state.df_real["Distribuidor"].unique(), default=st.session_state.df_real["Distribuidor"].unique())
+# --- MÓDULO 2: MÉTRICAS SPOTIFY ---
+elif menu == "Métricas Spotify":
+    st.subheader("📈 Rendimiento en Tiempo Real")
+    
+    fig = px.bar(df_final, x='Artista', y='Popularidad', color='Autor',
+                 hover_data=['Seguidores'], title="Popularidad por Artista y Autor",
+                 template="plotly_dark", barmode='group')
+    st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("### Top Artistas por Audiencia")
+    top_df = df_final.nlargest(5, 'Seguidores')
+    for _, row in top_df.iterrows():
+        cols = st.columns([1, 4])
+        if row['Imagen']: cols[0].image(row['Imagen'], width=60)
+        cols[1].write(f"**{row['Artista']}** | {row['Seguidores']:,} seguidores")
 
-mask = (st.session_state.df_real["Artista"].isin(f_art)) & (st.session_state.df_real["Distribuidor"].isin(f_dist))
-df_final = st.session_state.df_real[mask]
+# --- MÓDULO 3: AUDITORÍA DE DISTRIBUCIÓN ---
+elif menu == "Auditoría de Distribución":
+    st.subheader("📦 Control de Distribuidoras")
+    dist_choice = st.selectbox("Filtrar por Distribuidora", df_final['Distribuidor'].unique())
+    filtered_dist = df_final[df_final['Distribuidor'] == dist_choice]
+    st.table(filtered_dist[["Artista", "Autor", "Spotify_ID"]])
 
-# --- 6. KPIs ---
-total_rev = df_final["Revenue"].sum()
-total_plays = df_final["Streams"].sum()
-
-k1, k2, k3, k4 = st.columns(4)
-with k1: st.markdown(f'<div class="metric-card"><h5>Revenue JMP</h5><h2>${total_rev:,.2f}</h2></div>', unsafe_allow_html=True)
-with k2: st.markdown(f'<div class="metric-card"><h5>Total Plays</h5><h2>{total_plays:,}</h2></div>', unsafe_allow_html=True)
-with k3: st.markdown(f'<div class="metric-card"><h5>RPM</h5><h2>$3.80</h2></div>', unsafe_allow_html=True)
-with k4: st.markdown(f'<div class="metric-card"><h5>Status</h5><h2>🟢 Sync Ready</h2></div>', unsafe_allow_html=True)
-
-# --- 7. AUDITORÍA DETALLADA ---
-st.subheader("📋 Auditoría Detallada JMP (Distribución Real)")
-if not df_final.empty:
-    st.dataframe(
-        df_final[["Artista", "Autor", "Distribuidor", "Streams", "Revenue"]].style.background_gradient(cmap='Reds', subset=['Revenue']),
-        width='stretch'
-    )
-else:
-    st.warning("No hay datos para mostrar.")
-
-st.divider()
-
-# Gráfica de Cuota de Mercado
-st.subheader("📊 Distribución por Empresa")
-fig = px.pie(df_final, values='Streams', names='Distribuidor', hole=0.5, color_discrete_sequence=px.colors.sequential.RdBu)
-st.plotly_chart(fig, width='stretch')
+# --- MÓDULO 4: GENERADOR DE PLAYLISTS ---
+elif menu == "Generador de Playlists":
+    st.subheader("🪄 Creador Inteligente")
+    st.write("Selecciona un autor para crear una playlist con sus mejores tracks.")
+    autor_sel = st.selectbox("Seleccionar Autor", df_final['Autor'].unique())
+    
+    if st.button(f"Generar Selección para {autor_sel}"):
+        artistas_autor = df_final[df_final['Autor'] == autor_sel]['Artista'].tolist()
+        st.success(f"Analizando tracks para: {', '.join(artistas_autor)}")
+        st.info("Función de creación directa en Spotify: Desbloqueada con User Token (OAuth).")
