@@ -17,14 +17,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 1. AUTENTICACIÓN ---
+# --- 1. AUTENTICACIÓN CORREGIDA ---
 try:
-    client_id = st.secrets["d9a0a75ae8644699884d71c15c58e563"]
-    client_secret = st.secrets["a45b08ed2d544142a6b7b18a48e06b08"]
+    # Aquí llamamos al NOMBRE que pusiste en el cuadro de texto de Streamlit
+    client_id = st.secrets["SPOTIPY_CLIENT_ID"]
+    client_secret = st.secrets["SPOTIPY_CLIENT_SECRET"]
+    
     auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
     sp = spotipy.Spotify(auth_manager=auth_manager)
 except Exception as e:
-    st.error("🔑 Error: Configura 'SPOTIPY_CLIENT_ID' y 'SPOTIPY_CLIENT_SECRET' en los Secrets de Streamlit.")
+    st.error("🔑 Error: No se encontraron los nombres 'SPOTIPY_CLIENT_ID' y 'SPOTIPY_CLIENT_SECRET' en los Secrets.")
+    st.info("Asegúrate de que en el cuadro de texto de Streamlit pegaste los nombres tal cual, así:")
+    st.code('SPOTIPY_CLIENT_ID = "d9a0a75ae8644699884d71c15c58e563"\nSPOTIPY_CLIENT_SECRET = "a45b08ed2d544142a6b7b18a48e06b08"')
     st.stop()
 
 # --- 2. BASE DE DATOS JATUNE ---
