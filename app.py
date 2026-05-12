@@ -63,14 +63,31 @@ def get_full_artist_data(nombre):
     except:
         return None
 
-# --- 4. PROCESAMIENTO ---
+# --- 4. PROCESAMIENTO (CORREGIDO) ---
 with st.spinner('Sincronizando con Spotify API...'):
-    results = [get_full_artist_data(name) for name in df_label["Artista"]]
-    df_metrics = pd.DataFrame([r for r in results if r is not None])
-    df_final = pd.merge(df_label, df_metrics, left_on="Artista", right_index=False, how="left", suffixes=('', '_sp'))
-    # Unir por nombre para asegurar orden
-    df_final = pd.concat([df_label, pd.DataFrame(results)], axis=1)
-    df_final = df_final.loc[:,~df_final.columns.duplicated()]
+    # Obtenemos los datos de cada artista
+    results = []
+    for name in df_label["Artista"]:
+        data = get_full_artist_data(name)
+        if data:
+            # Añadimos el nombre para tener una columna en común para el "merge"
+            data["Artista"] = name
+            results.append(data)
+    
+    # Creamos el DataFrame de métricas
+    df_metrics = pd.DataFrame(results)
+    
+    if not df_metrics.empty:
+        # Unimos los datos del sello con los de Spotify usando la columna "Artista"
+        df_final = pd.merge(df_label, df_metrics, on="Artista", how="left")
+    else:
+        # Si falla la API, mantenemos los datos básicos para que no crashee
+        df_final = df_label.copy()
+        for col in ["Seguidores", "Popularidad", "Último Lanzamiento", "Fecha"]:
+            df_final[col] = 0 if col in ["Seguidores", "Popularidad"] else "N/A"
+
+# Limpieza: eliminar duplicados si existen por errores de re-ejecución
+df_final = df_final.loc[:,~df_final.columns.duplicated()]
 
 # --- 5. INTERFAZ (SIDEBAR) ---
 st.sidebar.title("🎹 JATune Control")
