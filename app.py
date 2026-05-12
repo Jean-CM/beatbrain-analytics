@@ -17,39 +17,59 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 1. AUTENTICACIÓN CORREGIDA ---
+# --- 1. AUTENTICACIÓN ---
+if "SPOTIPY_CLIENT_ID" not in st.secrets or "SPOTIPY_CLIENT_SECRET" not in st.secrets:
+    st.error("❌ Los Secrets no están configurados correctamente en Streamlit Cloud.")
+    st.stop()
+
 try:
-    # Aquí llamamos al NOMBRE que pusiste en el cuadro de texto de Streamlit
     client_id = st.secrets["SPOTIPY_CLIENT_ID"]
     client_secret = st.secrets["SPOTIPY_CLIENT_SECRET"]
-    
     auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
     sp = spotipy.Spotify(auth_manager=auth_manager)
 except Exception as e:
-    st.error("🔑 Error: No se encontraron los nombres 'SPOTIPY_CLIENT_ID' y 'SPOTIPY_CLIENT_SECRET' en los Secrets.")
-    st.info("Asegúrate de que en el cuadro de texto de Streamlit pegaste los nombres tal cual, así:")
-    st.code('SPOTIPY_CLIENT_ID = "d9a0a75ae8644699884d71c15c58e563"\nSPOTIPY_CLIENT_SECRET = "a45b08ed2d544142a6b7b18a48e06b08"')
+    st.error(f"⚠️ Error de conexión con Spotify API: {e}")
     st.stop()
 
-# --- 2. BASE DE DATOS JATUNE ---
+# --- 2. BASE DE DATOS JATUNE (BASADA EN TUS LINKS) ---
 data_label = {
-    "Artista": ["Jeantune", "JCSTUDIO", "JMAR", "YlegMoon", "Batytune", "Jzentrix", "JironPulse", "God Herd", "JJ Legacy", "Cielaurum", "QuietMetric", "AetherFocus", "ZukiPop", "LexiGo", "VYRONEX", "AEROVIA"],
-    "Autor": ["Jean C", "Jean C", "Jean C", "Angely", "Angely", "Dari", "Micha", "Jean C", "Jean C", "Angely", "Dari", "Jean C", "Jean C", "Jean C", "Jean C", "Jean C"],
-    "Distribuidor": ["Distrokid", "Distrokid", "Ditto", "Distrokid", "Distrokid", "Distrokid", "Distrokid", "TuneCore", "Symphonic", "Ditto", "Ditto", "Ditto", "Distrokid", "Distrokid", "Distrokid", "Distrokid"]
+    "Artista": [
+        "Jeantune", "JCSTUDIO", "JMAR", "YlegMoon", "Batytune", 
+        "Jzentrix", "JironPulse", "God Herd", "JJ Legacy", "Cielaurum", 
+        "QuietMetric", "AetherFocus", "ZukiPop", "LexiGo", "VYRONEX", 
+        "AEROVIA", "TechMich", "KRYONEXIS"
+    ],
+    "Spotify_ID": [
+        "5fEcz8Q0qnekHiZiBZRvKju", "3ASXkestGC7vmqDO5yCLse", "18c6Dk2b6hMLzB8cmzzrPY", 
+        "75CFdTAN4KXDm49EDGYP9M", "1t3wLDYDKnbrRhell7tPEO", "3dlOSWZSXIbqHkWBPzL3SQ", 
+        "3pWBw0J1CRdJIAuEz67yhe", "2rUGiDQNhoO41BZKMgRYgm", "2YbvhdJvr2ZZ1wzudZNSVR", 
+        "5eEX6GcNTOyrlQIKp8Asew", "2fhCGiSMjmTsPGKs4B5AoI", "6gh5WiuhW8GrejVgEe0WGl", 
+        "5Zy1nYnSiKShTBWMFeZZd", "2QCM36AO3ybRv3oSK2DhVM", "7pCE2OyAviRAYxybPadGRr", 
+        "5WWodGHXJkYv35xd95wm0k", "2Ahe0ypbR1U5rPMPndhSQX", "3mm1UR6VLrbUayPoRa5RfC"
+    ],
+    "Autor": [
+        "Jean C", "Jean C", "Jean C", "Angely", "Angely", 
+        "Dari", "Micha", "Jean C", "Jean C", "Angely", 
+        "Dari", "Jean C", "Jean C", "Jean C", "Jean C", 
+        "Jean C", "Micha", "Angy"
+    ],
+    "Distribuidor": [
+        "Distrokid", "Distrokid", "Ditto", "Distrokid", "Distrokid", 
+        "Distrokid", "Distrokid", "TuneCore", "Symphonic", "Ditto", 
+        "Ditto", "Ditto", "Distrokid", "Distrokid", "Distrokid", 
+        "Distrokid", "Distrokid", "Symphonic"
+    ]
 }
 df_label = pd.DataFrame(data_label)
 
 # --- 3. FUNCIONES DE EXTRACCIÓN ---
 @st.cache_data(ttl=3600)
-def get_full_artist_data(nombre):
+def get_full_artist_data(artist_id):
     try:
-        search = sp.search(q=f'artist:{nombre}', type='artist', limit=1)
-        if not search['artists']['items']: return None
-        a = search['artists']['items'][0]
-        
+        a = sp.artist(artist_id)
         # Obtener último lanzamiento
         albums = sp.artist_albums(a['id'], album_type='single,album', limit=1)
-        last_release = albums['items'][0]['name'] if albums['items'] else "N/A"
+        last_release = albums['items'][0]['name'] if albums['items'] else "Sin lanzamientos"
         release_date = albums['items'][0]['release_date'] if albums['items'] else "N/A"
         
         return {
@@ -60,22 +80,20 @@ def get_full_artist_data(nombre):
             "Fecha": release_date,
             "Imagen": a['images'][0]['url'] if a['images'] else None
         }
-    except:
+    except Exception:
         return None
 
-# --- 4. PROCESAMIENTO ROBUSTO ---
-with st.spinner('Sincronizando con Spotify API...'):
+# --- 4. PROCESAMIENTO ---
+with st.spinner('Actualizando métricas de JATune...'):
     results = []
-    for name in df_label["Artista"]:
-        data = get_full_artist_data(name)
-        if data:
-            data["Artista"] = name
-            results.append(data)
+    for sid in df_label["Spotify_ID"]:
+        res = get_full_artist_data(sid)
+        if res:
+            results.append(res)
         else:
-            # Datos por defecto si falla la búsqueda
+            # Datos de respaldo si falla la API para un ID específico
             results.append({
-                "Artista": name,
-                "Spotify_ID": "N/A",
+                "Spotify_ID": sid,
                 "Seguidores": 0,
                 "Popularidad": 0,
                 "Último Lanzamiento": "N/A",
@@ -84,11 +102,7 @@ with st.spinner('Sincronizando con Spotify API...'):
             })
     
     df_metrics = pd.DataFrame(results)
-    # Unimos asegurando que no se pierdan filas de tu lista original
-    df_final = pd.merge(df_label, df_metrics, on="Artista", how="left")
-
-# Limpieza técnica de duplicados
-df_final = df_final.loc[:,~df_final.columns.duplicated()]
+    df_final = pd.merge(df_label, df_metrics, on="Spotify_ID", how="left")
 
 # --- 5. INTERFAZ (SIDEBAR) ---
 st.sidebar.title("🎹 JATune Control")
@@ -114,12 +128,10 @@ elif menu == "Auditoría de Lanzamientos":
     st.title("🔍 Auditoría de Catálogo & Distribución")
     
     for _, row in df_final.iterrows():
-        # Verificamos si existe la columna 'Imagen' antes de usarla
         label_text = f"📌 {row['Artista']} ({row['Distribuidor']})"
         with st.expander(label_text):
             c1, c2 = st.columns([1, 3])
             
-            # Validación de seguridad para la imagen
             if "Imagen" in row and pd.notnull(row['Imagen']):
                 c1.image(row['Imagen'], width=100)
             else:
@@ -134,10 +146,13 @@ elif menu == "Exportar Reportes":
     st.title("📦 Gestión de Archivos")
     st.write("Descarga la data actual en formato Excel para reportes administrativos.")
     
-    # Generar Excel en memoria
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_final.drop(columns=['Imagen']).to_excel(writer, index=False, sheet_name='Data_JATune')
+        # Eliminamos la columna de imagen para el Excel
+        df_export = df_final.copy()
+        if 'Imagen' in df_export.columns:
+            df_export = df_export.drop(columns=['Imagen'])
+        df_export.to_excel(writer, index=False, sheet_name='Data_JATune')
     
     st.download_button(
         label="📥 Descargar Reporte Excel",
