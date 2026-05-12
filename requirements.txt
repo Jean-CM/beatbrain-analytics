@@ -1,7 +1,5 @@
 streamlit
+spotipy
 pandas
 plotly
-spotipy
-selenium
-webdriver-manager
-matplotlib
+openpyxl
