@@ -3,16 +3,17 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import pandas as pd
 import plotly.express as px
+from io import BytesIO
 
-# Configuración de página con look "High-Tech"
-st.set_page_config(page_title="JATune Command Center", layout="wide", page_icon="🚀")
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="JATune Command Center v2", layout="wide", page_icon="🚀")
 
-# Estilo Ejecutivo Personalizado
+# Estilo Ejecutivo (Dark Mode & Accents)
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; }
-    .stMetric { border: 1px solid #4d4d4d; padding: 10px; border-radius: 5px; background-color: #161b22; }
-    .sidebar .sidebar-content { background-image: linear-gradient(#2e3137,#0e1117); }
+    .main { background-color: #0d1117; color: #c9d1d9; }
+    .stMetric { border: 1px solid #30363d; padding: 15px; border-radius: 10px; background-color: #161b22; }
+    div[data-testid="stExpander"] { border: 1px solid #30363d; background-color: #0d1117; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -23,10 +24,10 @@ try:
     auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
     sp = spotipy.Spotify(auth_manager=auth_manager)
 except Exception as e:
-    st.error("⚠️ Error: Configura las credenciales en los Secrets de Streamlit.")
+    st.error("🔑 Error: Configura 'SPOTIPY_CLIENT_ID' y 'SPOTIPY_CLIENT_SECRET' en los Secrets de Streamlit.")
     st.stop()
 
-# --- 2. BASE DE DATOS DEL SELLO JATUNE ---
+# --- 2. BASE DE DATOS JATUNE ---
 data_label = {
     "Artista": ["Jeantune", "JCSTUDIO", "JMAR", "YlegMoon", "Batytune", "Jzentrix", "JironPulse", "God Herd", "JJ Legacy", "Cielaurum", "QuietMetric", "AetherFocus", "ZukiPop", "LexiGo", "VYRONEX", "AEROVIA"],
     "Autor": ["Jean C", "Jean C", "Jean C", "Angely", "Angely", "Dari", "Micha", "Jean C", "Jean C", "Angely", "Dari", "Jean C", "Jean C", "Jean C", "Jean C", "Jean C"],
@@ -34,82 +35,84 @@ data_label = {
 }
 df_label = pd.DataFrame(data_label)
 
-# --- 3. FUNCIONES DE APOYO ---
+# --- 3. FUNCIONES DE EXTRACCIÓN ---
 @st.cache_data(ttl=3600)
-def buscar_datos_spotify(nombre_artista):
-    """Busca al artista en Spotify y extrae métricas actuales."""
+def get_full_artist_data(nombre):
     try:
-        resultado = sp.search(q=f'artist:{nombre_artista}', type='artist', limit=1)
-        if resultado['artists']['items']:
-            a = resultado['artists']['items'][0]
-            return {
-                "Spotify_ID": a['id'],
-                "Seguidores": a['followers']['total'],
-                "Popularidad": a['popularity'],
-                "Link": a['external_urls']['spotify'],
-                "Imagen": a['images'][0]['url'] if a['images'] else None
-            }
+        search = sp.search(q=f'artist:{nombre}', type='artist', limit=1)
+        if not search['artists']['items']: return None
+        a = search['artists']['items'][0]
+        
+        # Obtener último lanzamiento
+        albums = sp.artist_albums(a['id'], album_type='single,album', limit=1)
+        last_release = albums['items'][0]['name'] if albums['items'] else "N/A"
+        release_date = albums['items'][0]['release_date'] if albums['items'] else "N/A"
+        
+        return {
+            "Spotify_ID": a['id'],
+            "Seguidores": a['followers']['total'],
+            "Popularidad": a['popularity'],
+            "Último Lanzamiento": last_release,
+            "Fecha": release_date,
+            "Imagen": a['images'][0]['url'] if a['images'] else None
+        }
     except:
         return None
-    return None
 
-# --- 4. INTERFAZ PRINCIPAL ---
-st.title("🎵 JATune Executive Dashboard")
-st.sidebar.image("https://img.icons8.com/fluency/96/music-record.png", width=80)
-st.sidebar.title("Navegación")
-menu = st.sidebar.radio("Ir a:", ["Vista General", "Métricas Spotify", "Auditoría de Distribución", "Generador de Playlists"])
+# --- 4. PROCESAMIENTO ---
+with st.spinner('Sincronizando con Spotify API...'):
+    results = [get_full_artist_data(name) for name in df_label["Artista"]]
+    df_metrics = pd.DataFrame([r for r in results if r is not None])
+    df_final = pd.merge(df_label, df_metrics, left_on="Artista", right_index=False, how="left", suffixes=('', '_sp'))
+    # Unir por nombre para asegurar orden
+    df_final = pd.concat([df_label, pd.DataFrame(results)], axis=1)
+    df_final = df_final.loc[:,~df_final.columns.duplicated()]
 
-# Lógica de Datos: Enriquecer DataFrame con Spotify
-with st.spinner('Actualizando métricas desde Spotify...'):
-    metrics = []
-    for art in df_label["Artista"]:
-        res = buscar_datos_spotify(art)
-        metrics.append(res if res else {"Spotify_ID": "N/A", "Seguidores": 0, "Popularidad": 0, "Link": "#", "Imagen": None})
+# --- 5. INTERFAZ (SIDEBAR) ---
+st.sidebar.title("🎹 JATune Control")
+menu = st.sidebar.selectbox("Seleccionar Módulo", ["Dashboard Ejecutivo", "Auditoría de Lanzamientos", "Exportar Reportes"])
+
+# --- MÓDULO: DASHBOARD ---
+if menu == "Dashboard Ejecutivo":
+    st.title("🚀 JATune Executive Analytics")
     
-    df_metrics = pd.DataFrame(metrics)
-    df_final = pd.concat([df_label, df_metrics], axis=1)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Catálogo Activo", len(df_final))
+    m2.metric("Audiencia Total", f"{df_final['Seguidores'].sum():,}")
+    m3.metric("Popularidad Promedio", f"{int(df_final['Popularidad'].mean())}%")
 
-# --- MÓDULO 1: VISTA GENERAL ---
-if menu == "Vista General":
-    st.subheader("📋 Resumen del Catálogo JATune")
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Artistas", len(df_final))
-    col2.metric("Total Seguidores", f"{df_final['Seguidores'].sum():,}")
-    col3.metric("Distribuidora Principal", df_final['Distribuidor'].mode()[0])
-
-    st.dataframe(df_final[["Artista", "Autor", "Distribuidor", "Popularidad", "Seguidores"]], use_container_width=True)
-
-# --- MÓDULO 2: MÉTRICAS SPOTIFY ---
-elif menu == "Métricas Spotify":
-    st.subheader("📈 Rendimiento en Tiempo Real")
-    
-    fig = px.bar(df_final, x='Artista', y='Popularidad', color='Autor',
-                 hover_data=['Seguidores'], title="Popularidad por Artista y Autor",
-                 template="plotly_dark", barmode='group')
+    st.markdown("---")
+    fig = px.bar(df_final, x="Artista", y="Popularidad", color="Autor", 
+                 title="Ranking de Popularidad por Identidad", template="plotly_dark",
+                 color_discrete_sequence=px.colors.qualitative.Pastel)
     st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("### Top Artistas por Audiencia")
-    top_df = df_final.nlargest(5, 'Seguidores')
-    for _, row in top_df.iterrows():
-        cols = st.columns([1, 4])
-        if row['Imagen']: cols[0].image(row['Imagen'], width=60)
-        cols[1].write(f"**{row['Artista']}** | {row['Seguidores']:,} seguidores")
 
-# --- MÓDULO 3: AUDITORÍA DE DISTRIBUCIÓN ---
-elif menu == "Auditoría de Distribución":
-    st.subheader("📦 Control de Distribuidoras")
-    dist_choice = st.selectbox("Filtrar por Distribuidora", df_final['Distribuidor'].unique())
-    filtered_dist = df_final[df_final['Distribuidor'] == dist_choice]
-    st.table(filtered_dist[["Artista", "Autor", "Spotify_ID"]])
-
-# --- MÓDULO 4: GENERADOR DE PLAYLISTS ---
-elif menu == "Generador de Playlists":
-    st.subheader("🪄 Creador Inteligente")
-    st.write("Selecciona un autor para crear una playlist con sus mejores tracks.")
-    autor_sel = st.selectbox("Seleccionar Autor", df_final['Autor'].unique())
+# --- MÓDULO: AUDITORÍA ---
+elif menu == "Auditoría de Lanzamientos":
+    st.title("🔍 Auditoría de Catálogo & Distribución")
+    st.write("Verifica que tus distribuidoras hayan indexado correctamente los últimos tracks.")
     
-    if st.button(f"Generar Selección para {autor_sel}"):
-        artistas_autor = df_final[df_final['Autor'] == autor_sel]['Artista'].tolist()
-        st.success(f"Analizando tracks para: {', '.join(artistas_autor)}")
-        st.info("Función de creación directa en Spotify: Desbloqueada con User Token (OAuth).")
+    for _, row in df_final.iterrows():
+        with st.expander(f"📌 {row['Artista']} ({row['Distribuidor']})"):
+            c1, c2 = st.columns([1, 3])
+            if row['Imagen']: c1.image(row['Imagen'], width=100)
+            c2.write(f"**Último lanzamiento:** {row['Último Lanzamiento']}")
+            c2.write(f"**Fecha:** {row['Fecha']}")
+            c2.write(f"**Spotify ID:** `{row['Spotify_ID']}`")
+
+# --- MÓDULO: EXPORTAR ---
+elif menu == "Exportar Reportes":
+    st.title("📦 Gestión de Archivos")
+    st.write("Descarga la data actual en formato Excel para reportes administrativos.")
+    
+    # Generar Excel en memoria
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_final.drop(columns=['Imagen']).to_excel(writer, index=False, sheet_name='Data_JATune')
+    
+    st.download_button(
+        label="📥 Descargar Reporte Excel",
+        data=output.getvalue(),
+        file_name="Reporte_JATune_Spotify.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
