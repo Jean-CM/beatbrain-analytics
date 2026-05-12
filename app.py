@@ -63,30 +63,31 @@ def get_full_artist_data(nombre):
     except:
         return None
 
-# --- 4. PROCESAMIENTO (CORREGIDO) ---
+# --- 4. PROCESAMIENTO ROBUSTO ---
 with st.spinner('Sincronizando con Spotify API...'):
-    # Obtenemos los datos de cada artista
     results = []
     for name in df_label["Artista"]:
         data = get_full_artist_data(name)
         if data:
-            # Añadimos el nombre para tener una columna en común para el "merge"
             data["Artista"] = name
             results.append(data)
+        else:
+            # Datos por defecto si falla la búsqueda
+            results.append({
+                "Artista": name,
+                "Spotify_ID": "N/A",
+                "Seguidores": 0,
+                "Popularidad": 0,
+                "Último Lanzamiento": "N/A",
+                "Fecha": "N/A",
+                "Imagen": None
+            })
     
-    # Creamos el DataFrame de métricas
     df_metrics = pd.DataFrame(results)
-    
-    if not df_metrics.empty:
-        # Unimos los datos del sello con los de Spotify usando la columna "Artista"
-        df_final = pd.merge(df_label, df_metrics, on="Artista", how="left")
-    else:
-        # Si falla la API, mantenemos los datos básicos para que no crashee
-        df_final = df_label.copy()
-        for col in ["Seguidores", "Popularidad", "Último Lanzamiento", "Fecha"]:
-            df_final[col] = 0 if col in ["Seguidores", "Popularidad"] else "N/A"
+    # Unimos asegurando que no se pierdan filas de tu lista original
+    df_final = pd.merge(df_label, df_metrics, on="Artista", how="left")
 
-# Limpieza: eliminar duplicados si existen por errores de re-ejecución
+# Limpieza técnica de duplicados
 df_final = df_final.loc[:,~df_final.columns.duplicated()]
 
 # --- 5. INTERFAZ (SIDEBAR) ---
@@ -111,15 +112,22 @@ if menu == "Dashboard Ejecutivo":
 # --- MÓDULO: AUDITORÍA ---
 elif menu == "Auditoría de Lanzamientos":
     st.title("🔍 Auditoría de Catálogo & Distribución")
-    st.write("Verifica que tus distribuidoras hayan indexado correctamente los últimos tracks.")
     
     for _, row in df_final.iterrows():
-        with st.expander(f"📌 {row['Artista']} ({row['Distribuidor']})"):
+        # Verificamos si existe la columna 'Imagen' antes de usarla
+        label_text = f"📌 {row['Artista']} ({row['Distribuidor']})"
+        with st.expander(label_text):
             c1, c2 = st.columns([1, 3])
-            if row['Imagen']: c1.image(row['Imagen'], width=100)
-            c2.write(f"**Último lanzamiento:** {row['Último Lanzamiento']}")
-            c2.write(f"**Fecha:** {row['Fecha']}")
-            c2.write(f"**Spotify ID:** `{row['Spotify_ID']}`")
+            
+            # Validación de seguridad para la imagen
+            if "Imagen" in row and pd.notnull(row['Imagen']):
+                c1.image(row['Imagen'], width=100)
+            else:
+                c1.info("Sin imagen")
+                
+            c2.write(f"**Último lanzamiento:** {row.get('Último Lanzamiento', 'N/A')}")
+            c2.write(f"**Fecha:** {row.get('Fecha', 'N/A')}")
+            c2.write(f"**Spotify ID:** `{row.get('Spotify_ID', 'N/A')}`")
 
 # --- MÓDULO: EXPORTAR ---
 elif menu == "Exportar Reportes":
